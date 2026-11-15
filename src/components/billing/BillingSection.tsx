@@ -224,10 +224,14 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     const cleanTerm = rawTerm.replace(/[\s\r\n\t>]+/g, '');
     return products.filter(p => {
       const pBarcode = (p.barcode || '').trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase();
+      const altBarcodes = (p.alternateBarcodes || []).map(b => b.trim().toLowerCase());
+      const serials = (p.serialNumbers || []).map(s => s.trim().toLowerCase());
       return (
         p.name.toLowerCase().includes(rawTerm) ||
         p.sku.toLowerCase().includes(rawTerm) ||
-        (pBarcode && (pBarcode.includes(cleanTerm) || cleanTerm.includes(pBarcode)))
+        (pBarcode && (pBarcode.includes(cleanTerm) || cleanTerm.includes(pBarcode))) ||
+        altBarcodes.some(b => b.includes(cleanTerm) || cleanTerm.includes(b)) ||
+        serials.some(s => s.includes(cleanTerm) || cleanTerm.includes(s))
       );
     }).slice(0, 15);
   }, [products, fastSearch]);
@@ -235,18 +239,25 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
   // Fast Product Pick Action: Configurable Fast Add vs Step-by-Step Entry
   const isQuickSearchAdd = billingSettings?.quickSearchAdd !== false;
 
-  const handleSelectProduct = (prod: Product) => {
+  const handleSelectProduct = (prod: Product, scannedSerial?: string) => {
+    const rawSearch = fastSearch.trim();
+    const cleanCode = rawSearch.replace(/[\s\r\n\t>]+/g, '');
+    const serialToAdd = scannedSerial || (cleanCode && (
+      cleanCode === prod.barcode?.replace(/[\s\r\n\t>]+/g, '') ||
+      (prod.alternateBarcodes || []).some(b => b.replace(/[\s\r\n\t>]+/g, '') === cleanCode)
+    ) ? cleanCode : undefined);
+
     if (isQuickSearchAdd) {
       // Instant Mode: Qty, Free, Rate, and Remark are purely optional
       const qtyToAdd = fastQty > 0 ? fastQty : 1;
       const freeQtyToAdd = fastFreeQty > 0 ? fastFreeQty : 0;
       const remarkToAdd = fastRemark.trim();
 
-      addItemByProduct(prod, qtyToAdd, 0, 0, freeQtyToAdd, remarkToAdd);
+      addItemByProduct(prod, qtyToAdd, 0, 0, freeQtyToAdd, remarkToAdd, serialToAdd);
       playBeep();
       resetFastInputs();
       setShowSuggestions(false);
-      onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}" to bill.`);
+      onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}"${serialToAdd ? ` (SN: ${serialToAdd})` : ''} to bill.`);
       setTimeout(() => {
         barcodeInputRef.current?.focus();
       }, 50);
@@ -256,6 +267,9 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
       setFastSearch(prod.name);
       setFastRate(prod.saleRate);
       setFastQty(1);
+      if (serialToAdd) {
+        setFastRemark(`SN: ${serialToAdd}`);
+      }
       setShowSuggestions(false);
       setTimeout(() => {
         qtyInputRef.current?.focus();
@@ -403,12 +417,14 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
       return;
     }
 
-    // Barcode Scan / Exact SKU Lookup
+    // Barcode Scan / Exact SKU Lookup (supports primary barcode, comma-delimited barcodes, and alternate serials)
     const cleanSearch = searchTerm.replace(/[\s\r\n\t>]+/g, '').toLowerCase();
     let matchingBarcodes = products.filter(
       p => {
-        const b = (p.barcode || '').trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase();
-        return b && b === cleanSearch;
+        const barcodes = (p.barcode || '').split(',').map(b => b.trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase());
+        const altBarcodes = (p.alternateBarcodes || []).map(b => b.trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase());
+        const serials = (p.serialNumbers || []).map(s => s.trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase());
+        return barcodes.includes(cleanSearch) || altBarcodes.includes(cleanSearch) || serials.includes(cleanSearch);
       }
     );
 
@@ -417,8 +433,9 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
       try {
         const localAll = await db.products.toArray();
         const dbMatches = localAll.filter(p => {
-          const b = (p.barcode || '').trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase();
-          return b && b === cleanSearch;
+          const barcodes = (p.barcode || '').split(',').map(b => b.trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase());
+          const altBarcodes = (p.alternateBarcodes || []).map(b => b.trim().replace(/[\s\r\n\t>]+/g, '').toLowerCase());
+          return barcodes.includes(cleanSearch) || altBarcodes.includes(cleanSearch);
         });
         if (dbMatches.length > 0) {
           matchingBarcodes = dbMatches;
@@ -430,7 +447,7 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     }
 
     if (matchingBarcodes.length === 1) {
-      handleSelectProduct(matchingBarcodes[0]);
+      handleSelectProduct(matchingBarcodes[0], cleanSearch);
       return;
     }
 
@@ -1296,7 +1313,16 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
                         {/* Product Name & SKU */}
                         <td className="py-3 px-3">
                           <div className="font-extrabold text-sm text-[#0F172A] leading-snug">{item.productName}</div>
-                          <div className="text-xs text-[#64748B] font-mono mt-0.5 font-medium">SKU: {item.sku} {item.barcode ? `• ${item.barcode}` : ''}</div>
+                          <div className="text-xs text-[#64748B] font-mono mt-0.5 font-medium flex items-center gap-1.5 flex-wrap">
+                            <span>SKU: {item.sku}</span>
+                            {item.serialNumber ? (
+                              <span className="bg-blue-50 text-blue-700 font-extrabold text-[10px] px-1.5 py-0.5 rounded border border-blue-200 shadow-2xs">
+                                SN: {item.serialNumber}
+                              </span>
+                            ) : (
+                              item.barcode && <span>• {item.barcode}</span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Pack */}

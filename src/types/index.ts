@@ -28,6 +28,24 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
   synced?: boolean;
+  hasSerialTracking?: boolean;
+  alternateBarcodes?: string[];
+  serialNumbers?: string[];
+}
+
+export type ProductSerialStatus = 'in_stock' | 'sold' | 'damaged' | 'returned';
+
+export interface ProductSerial {
+  id: string;
+  productId: string;
+  serialNumber: string;
+  status: ProductSerialStatus;
+  invoiceId?: string;
+  costPrice?: number;
+  soldAt?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface InvoiceItem {
@@ -36,6 +54,7 @@ export interface InvoiceItem {
   productName: string;
   sku: string;
   barcode: string;
+  serialNumber?: string;
   hsnCode: string;
   pack: string;
   remark?: string;

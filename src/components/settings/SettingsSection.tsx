@@ -3,8 +3,10 @@ import {
   Store, Save, RefreshCw, Download, Upload, ShieldCheck, Trash2,
   Printer, Receipt, FileText, CheckCircle2, Usb, Scissors, Zap, DollarSign, Info, Monitor,
   Volume2, VolumeX, Bluetooth, ShoppingBag, MessageCircle, Image as ImageIcon,
-  ArrowLeft, ChevronRight, Settings, Sparkles, Key, Eye, EyeOff, ExternalLink, Keyboard
+  ArrowLeft, ChevronRight, Settings, Sparkles, Key, Eye, EyeOff, ExternalLink, Keyboard,
+  ScanBarcode, Barcode, Tag
 } from 'lucide-react';
+import { BarcodeGeneratorModal } from '../products/BarcodeGeneratorModal';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useProductStore } from '../../store/useProductStore';
 import { useSalesStore } from '../../store/useSalesStore';
@@ -39,14 +41,24 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
     loadSettings, saveShopProfile, savePrintSettings, saveBillingSettings, saveSupabaseConfig, testConnection, exportBackupJSON, importBackupJSON, clearAllDemoData
   } = useSettingsStore();
 
-  const { loadProducts } = useProductStore();
+  const { products, loadProducts } = useProductStore();
   const { loadInvoices } = useSalesStore();
 
   const { syncWithSupabase: syncProducts } = useProductStore();
   const { syncInvoicesWithSupabase: syncInvoices } = useSalesStore();
 
-  const [activeTab, setActiveTab] = useState<'shop' | 'billing' | 'print' | 'backup' | 'sound' | 'ai' | 'shortcuts' | null>(null);
+  const [activeTab, setActiveTab] = useState<'shop' | 'billing' | 'print' | 'hardware' | 'backup' | 'sound' | 'ai' | 'shortcuts' | null>(null);
   const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
+  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  const [hardwareScanInput, setHardwareScanInput] = useState('');
+  const [lastHardwareScan, setLastHardwareScan] = useState<{
+    code: string;
+    length: number;
+    speedMs: number;
+    matchedProduct?: any;
+    timestamp: string;
+  } | null>(null);
+  const scanStartTimeRef = React.useRef<number | null>(null);
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(() => 
     typeof window !== 'undefined' ? localStorage.getItem('webrajya_last_backup_date') : null
   );
@@ -558,6 +570,45 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
     )
   );
 
+  const handleHardwareScanKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!scanStartTimeRef.current) {
+      scanStartTimeRef.current = Date.now();
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const code = hardwareScanInput.trim().replace(/[\s\r\n\t>]+/g, '');
+      if (!code) return;
+      const speed = scanStartTimeRef.current ? Math.max(1, Date.now() - scanStartTimeRef.current) : 10;
+      scanStartTimeRef.current = null;
+
+      // Find matching product in catalog
+      const clean = code.toLowerCase();
+      const match = products.find(p => {
+        const b = (p.barcode || '').trim().toLowerCase();
+        const s = (p.sku || '').trim().toLowerCase();
+        const alt = (p.alternateBarcodes || []).map(x => x.trim().toLowerCase());
+        return b === clean || s === clean || alt.includes(clean);
+      });
+
+      if (match) {
+        playBeep();
+        onToast('success', 'Hardware Scanner Test: Product Matched!', `Found "${match.name}" (${match.sku})`);
+      } else {
+        playBeep();
+        onToast('info', 'Hardware Scanner Test: Code Captured', `Scanned ${code} (${code.length} digits) - No product matched yet.`);
+      }
+
+      setLastHardwareScan({
+        code,
+        length: code.length,
+        speedMs: speed,
+        matchedProduct: match,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      setHardwareScanInput('');
+    }
+  };
+
   const settingCategories = [
     {
       id: 'shop' as const,
@@ -582,6 +633,14 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
       icon: <Printer className="w-5 h-5 text-[#D97706]" />,
       iconBg: 'bg-amber-50 text-[#D97706] border-amber-200',
       meta: printSettings?.paperSize || 'A5'
+    },
+    {
+      id: 'hardware' as const,
+      title: 'Machines & Hardware Integration',
+      subtitle: 'USB/Bluetooth Barcode Scanners, Thermal Receipt Printers & Barcode Label Printers',
+      icon: <ScanBarcode className="w-5 h-5 text-[#0284C7]" />,
+      iconBg: 'bg-cyan-50 text-[#0284C7] border-cyan-200',
+      meta: 'Scanner & Printer'
     },
     {
       id: 'backup' as const,
@@ -799,6 +858,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
                 {activeTab === 'shop' && <><Store className="w-4 h-4 text-[#2563EB]" /> Shop Profile</>}
                 {activeTab === 'billing' && <><Receipt className="w-4 h-4 text-[#16A34A]" /> Invoice & Tax Modes</>}
                 {activeTab === 'print' && <><Printer className="w-4 h-4 text-[#D97706]" /> Print & Paper</>}
+                {activeTab === 'hardware' && <><ScanBarcode className="w-4 h-4 text-[#0284C7]" /> Machines & Hardware</>}
                 {activeTab === 'backup' && <><Download className="w-4 h-4 text-[#7C3AED]" /> Backup & Restore</>}
                 {activeTab === 'sound' && <><Volume2 className="w-4 h-4 text-[#4F46E5]" /> Sound & Audio</>}
                 {activeTab === 'ai' && <><Sparkles className="w-4 h-4 text-[#8B5CF6]" /> AI & Gemini Configuration</>}
@@ -1962,6 +2022,215 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
           </form>
         )}
 
+        {activeTab === 'hardware' && (
+          <div className="max-w-3xl space-y-6">
+            {/* 1. Barcode Scanners */}
+            <div>
+              <div className="flex items-center justify-between border-b border-[#D8E1EC] pb-2 mb-3">
+                <h3 className="text-sm font-extrabold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                  <ScanBarcode className="w-4 h-4 text-[#0284C7]" />
+                  Handheld & Desktop Barcode Scanners
+                </h3>
+                <span className="flex items-center gap-1 text-[11px] font-bold text-[#15803D] bg-[#F0FDF4] border border-[#BBF7D0] px-2.5 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
+                  Plug & Play Ready (HID Wedge)
+                </span>
+              </div>
+              <p className="text-xs text-[#64748B] mb-3">
+                USB and 2.4GHz Wireless scanners work automatically like a super-fast keyboard. WebRajya intercepts scanner bursts anywhere in the app with zero driver installation.
+              </p>
+
+              {/* Interactive Live Scanner Tester Card */}
+              <div className="p-4 bg-[#F8FAFC] border-2 border-[#D8E1EC] rounded-xl space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-xs text-[#172B4D] flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-[#2563EB]" />
+                    Live Barcode Scanner Diagnostics & Speed Test
+                  </div>
+                  <span className="text-[10px] text-[#64748B] font-mono">Status: Listening for scan</span>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={hardwareScanInput}
+                    onChange={(e) => {
+                      if (!scanStartTimeRef.current) scanStartTimeRef.current = Date.now();
+                      setHardwareScanInput(e.target.value);
+                    }}
+                    onKeyDown={handleHardwareScanKeyDown}
+                    placeholder="Click here and pull your barcode scanner trigger (or scan 2323818749899019946875)..."
+                    className="w-full pl-3 pr-28 py-2.5 bg-white border-2 border-[#2563EB]/40 focus:border-[#2563EB] rounded-lg text-xs font-mono font-bold text-[#172B4D] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 transition-all shadow-inner"
+                  />
+                  <div className="absolute right-2 top-2">
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-mono font-bold rounded border border-blue-200">
+                      Press Enter or Scan
+                    </span>
+                  </div>
+                </div>
+
+                {lastHardwareScan && (
+                  <div className="p-3 bg-white border border-[#BFDBFE] rounded-lg space-y-1.5 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#15803D] flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Scan Successfully Captured
+                      </span>
+                      <span className="text-[10px] text-[#64748B] font-mono">{lastHardwareScan.timestamp}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-xs pt-1">
+                      <div className="bg-[#F1F5F9] p-2 rounded">
+                        <span className="text-[10px] text-[#64748B] block font-sans">Decoded Barcode:</span>
+                        <strong className="text-[#172B4D] text-sm break-all">{lastHardwareScan.code}</strong>
+                      </div>
+                      <div className="bg-[#F1F5F9] p-2 rounded">
+                        <span className="text-[10px] text-[#64748B] block font-sans">Length & Latency:</span>
+                        <strong className="text-[#2563EB]">{lastHardwareScan.length} digits ({lastHardwareScan.speedMs}ms)</strong>
+                      </div>
+                      <div className="bg-[#F1F5F9] p-2 rounded">
+                        <span className="text-[10px] text-[#64748B] block font-sans">Catalog Match:</span>
+                        {lastHardwareScan.matchedProduct ? (
+                          <strong className="text-[#15803D]">{lastHardwareScan.matchedProduct.name}</strong>
+                        ) : (
+                          <span className="text-amber-600 font-bold">Unregistered SKU</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Thermal Receipt & POS Printers */}
+            <div>
+              <div className="flex items-center justify-between border-b border-[#D8E1EC] pb-2 mb-3">
+                <h3 className="text-sm font-extrabold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                  <Printer className="w-4 h-4 text-[#D97706]" />
+                  Thermal POS Receipt Printers (80mm / 58mm)
+                </h3>
+              </div>
+              <p className="text-xs text-[#64748B] mb-3">
+                Connect your USB or Bluetooth thermal roll printer for lightning-fast sub-second receipts and automatic paper cutting.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* USB Direct Print Card */}
+                <div className="p-4 bg-white border border-[#D8E1EC] rounded-xl flex flex-col justify-between shadow-2xs">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <Usb className="w-4 h-4 text-[#2563EB]" />
+                        <span className="font-extrabold text-xs text-[#0F172A]">USB ESC/POS Printer</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        WebUSB
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#64748B] leading-relaxed mb-3">
+                      Bypasses standard OS print preview dialogs for instant 100ms printing with automatic drawer kick.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#F1F5F9]">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await testUsbPrinter();
+                          onToast('success', 'USB Printer Test Sent', 'Check your thermal printer for the printed slip.');
+                        } catch (err: any) {
+                          onToast('info', 'WebUSB Notice', err?.message || 'Please connect USB printer via Pair button first.');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Test USB Print
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await pairUsbPrinter();
+                          onToast('success', 'Printer Paired', 'USB Printer connected successfully.');
+                        } catch (err: any) {
+                          onToast('error', 'Pair Failed', err?.message || 'USB pairing canceled.');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#475569] border border-[#D8E1EC] rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Pair Device
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bluetooth Thermal Card */}
+                <div className="p-4 bg-white border border-[#D8E1EC] rounded-xl flex flex-col justify-between shadow-2xs">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <Bluetooth className="w-4 h-4 text-[#0284C7]" />
+                        <span className="font-extrabold text-xs text-[#0F172A]">Wireless Bluetooth Printer</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                        BLE POS
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#64748B] leading-relaxed mb-3">
+                      Wirelessly print customer bills from laptops, iPads, tablets, or Android POS terminals.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#F1F5F9]">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await printTestBluetooth(shopProfile.shopName || 'WEBRAJYA POS');
+                          onToast('success', 'Bluetooth Test Sent', 'Printed test slip via Bluetooth.');
+                        } catch (err: any) {
+                          onToast('info', 'Bluetooth Notice', err?.message || 'Connect Bluetooth printer first.');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0] rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Test Bluetooth
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Barcode Sticker & Label Printers */}
+            <div>
+              <div className="flex items-center justify-between border-b border-[#D8E1EC] pb-2 mb-3">
+                <h3 className="text-sm font-extrabold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                  <Barcode className="w-4 h-4 text-[#7C3AED]" />
+                  Barcode Sticker & Serial Number Label Printers
+                </h3>
+              </div>
+              <p className="text-xs text-[#64748B] mb-3">
+                Generate and print scannable Code 128 barcode stickers (like Happy Brother serial 2323818749899019946875) for your products on thermal roll stickers or A4 label sheets.
+              </p>
+
+              <div className="p-4 bg-white border border-[#D8E1EC] rounded-xl flex items-center justify-between shadow-2xs">
+                <div>
+                  <div className="font-bold text-xs text-[#0F172A]">
+                    Launch Barcode Label Generator & Sticker Roll Studio
+                  </div>
+                  <div className="text-[11px] text-[#64748B] mt-0.5">
+                    Supports 50mm × 25mm rolls, 38mm × 25mm mini rolls, and A4 24/40 sticker sheets.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsBarcodeModalOpen(true)}
+                  className="px-4 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Tag className="w-4 h-4" /> Open Label Studio
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'backup' && (
           <div className="max-w-2xl space-y-6">
             <h3 className="text-sm font-extrabold text-[#172B4D] uppercase tracking-wider border-b border-[#D8E1EC] pb-2">
@@ -2404,6 +2673,15 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
         isInstalled={isInstalled}
         isIos={isIos}
         initialTab={installModalTab}
+      />
+
+      {/* Barcode & Serial Label Sticker Modal */}
+      <BarcodeGeneratorModal
+        isOpen={isBarcodeModalOpen}
+        onClose={() => setIsBarcodeModalOpen(false)}
+        products={products}
+        shopProfile={shopProfile}
+        onToast={onToast}
       />
     </div>
   );

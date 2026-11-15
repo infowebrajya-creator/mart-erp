@@ -108,6 +108,8 @@ CREATE TABLE IF NOT EXISTS public.products (
   low_stock_threshold NUMERIC(12,3) DEFAULT 5.000,
   
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  has_serial_tracking BOOLEAN NOT NULL DEFAULT FALSE,
+  alternate_barcodes TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -119,6 +121,32 @@ CREATE INDEX IF NOT EXISTS idx_products_name ON public.products (name);
 CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON public.products USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products (category);
 CREATE INDEX IF NOT EXISTS idx_products_is_active ON public.products (is_active);
+
+-- ==============================================================================
+-- 5B. PRODUCT SERIAL NUMBERS / UNIQUE UNIT BARCODES TABLE
+-- For piece-level unique tracking (e.g. Happy Brother 2323818749899019946875)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.product_serials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  serial_number TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'in_stock' CHECK (status IN ('in_stock', 'sold', 'damaged', 'returned')),
+  invoice_id TEXT REFERENCES public.invoices(id) ON DELETE SET NULL,
+  cost_price NUMERIC(12,2),
+  sold_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_serials_serial ON public.product_serials (serial_number);
+CREATE INDEX IF NOT EXISTS idx_product_serials_product_id ON public.product_serials (product_id);
+CREATE INDEX IF NOT EXISTS idx_product_serials_status ON public.product_serials (status);
+
+DROP TRIGGER IF EXISTS trg_product_serials_updated_at ON public.product_serials;
+CREATE TRIGGER trg_product_serials_updated_at
+BEFORE UPDATE ON public.product_serials
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_column();
 
 -- Auto-synchronize dual-column naming conventions on insert/update
 CREATE OR REPLACE FUNCTION public.sync_product_dual_columns()
@@ -603,6 +631,14 @@ BEGIN
     WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'suppliers'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.suppliers;
+  END IF;
+
+  -- 8. Product Serials (Real-time serial barcode unit tracking)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'product_serials'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.product_serials;
   END IF;
 
 EXCEPTION

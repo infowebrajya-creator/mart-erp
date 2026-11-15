@@ -355,7 +355,9 @@ export const ProductsSection: React.FC<ProductsSectionProps> = ({
       return p.name.toLowerCase().includes(q) ||
         p.sku.toLowerCase().includes(q) ||
         p.barcode.toLowerCase().includes(q) ||
-        p.hsnCode.toLowerCase().includes(q);
+        p.hsnCode.toLowerCase().includes(q) ||
+        (p.alternateBarcodes && p.alternateBarcodes.some(b => b.toLowerCase().includes(q))) ||
+        (p.serialNumbers && p.serialNumbers.some(s => s.toLowerCase().includes(q)));
     });
   }, [products, selectedCategory, statusFilter, searchQuery]);
 
@@ -811,6 +813,10 @@ export const ProductsSection: React.FC<ProductsSectionProps> = ({
         product={viewingProduct}
         onEdit={handleOpenEditModal}
         onToggleActive={toggleProductActiveStatus}
+        onPrintBarcode={(prod) => {
+          setBarcodeTargetProduct(prod);
+          setIsBarcodeModalOpen(true);
+        }}
       />
 
       {/* Bulk Import Modal */}

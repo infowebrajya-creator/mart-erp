@@ -30,7 +30,7 @@ interface BillingState {
   setIsInterstate: (isInterstate: boolean) => void;
   setNotes: (notes: string) => void;
 
-  addItemByProduct: (product: Product, qty?: number, schemeDiscPct?: number, addlDiscPct?: number, freeQty?: number, remark?: string) => void;
+  addItemByProduct: (product: Product, qty?: number, schemeDiscPct?: number, addlDiscPct?: number, freeQty?: number, remark?: string, serialNumber?: string) => void;
   addCustomItem: (custom: { name: string; rate: number; qty?: number; unit?: any; hsnCode?: string; gstRate?: any }) => void;
   updateItemRemark: (itemId: string, remark: string) => void;
   updateItemQty: (itemId: string, qty: number) => void;
@@ -132,7 +132,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
     get().persistActiveCartToIndexedDB();
   },
 
-  addItemByProduct: (product, qty = 1, schemeDiscPct = 0, addlDiscPct = 0, freeQty = 0, remark = '') => {
+  addItemByProduct: (product, qty = 1, schemeDiscPct = 0, addlDiscPct = 0, freeQty = 0, remark = '', serialNumber = '') => {
     const { items, isInterstate } = get();
     const existingIndex = items.findIndex(i => i.productId === product.id);
 
@@ -155,6 +155,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         qty: newQty,
         freeQty: existing.freeQty + freeQty,
         remark: remark ? (existing.remark ? `${existing.remark}, ${remark}` : remark) : existing.remark,
+        serialNumber: serialNumber ? (existing.serialNumber ? `${existing.serialNumber}, ${serialNumber}` : serialNumber) : existing.serialNumber,
         availableStock: product.stockQty,
         ...taxes
       };
@@ -176,6 +177,7 @@ export const useBillingStore = create<BillingState>((set, get) => ({
         productName: product.name,
         sku: product.sku || '',
         barcode: product.barcode || '',
+        serialNumber: serialNumber || '',
         hsnCode: product.hsnCode || '',
         pack: product.packInfo || '1 Pcs',
         remark: remark || '',

@@ -1,8 +1,9 @@
 import React from 'react';
-import { Power, Edit } from 'lucide-react';
+import { Power, Edit, Barcode, Printer } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { Badge } from '../common/Badge';
 import type { Product } from '../../types';
+import { encodeCode128 } from '../../utils/barcode128';
 
 interface ProductDetailModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface ProductDetailModalProps {
   product: Product | null;
   onEdit: (product: Product) => void;
   onToggleActive: (id: string) => void;
+  onPrintBarcode?: (product: Product) => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -17,12 +19,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onClose,
   product,
   onEdit,
-  onToggleActive
+  onToggleActive,
+  onPrintBarcode
 }) => {
   if (!product) return null;
 
   const marginAmount = Math.max(0, product.saleRate - product.purchaseRate);
   const marginPct = product.saleRate > 0 ? ((marginAmount / product.saleRate) * 100).toFixed(1) : '0';
+  const barcodeValue = product.barcode || product.sku;
+  const encoded = encodeCode128(barcodeValue);
 
   return (
     <Modal
@@ -32,7 +37,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       subtitle={`SKU: ${product.sku} | Barcode: ${product.barcode || 'N/A'}`}
       maxWidth="lg"
     >
-      <div className="space-y-6 font-sans text-[#172B4D]">
+      <div className="space-y-5 font-sans text-[#172B4D]">
         {/* Header Badges */}
         <div className="flex items-center justify-between p-3 bg-[#F5F9FF] border border-[#D8E1EC] rounded-xl">
           <div className="flex items-center gap-2">
@@ -52,6 +57,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <Power className="w-3.5 h-3.5" />
             {product.isActive ? 'Deactivate' : 'Activate'}
           </button>
+        </div>
+
+        {/* Live Scannable Barcode Graphic */}
+        <div className="bg-white border-2 border-[#D8E1EC] p-4 rounded-xl flex flex-col items-center justify-center text-center shadow-xs">
+          <div className="text-[11px] font-bold text-[#64748B] mb-2 uppercase tracking-wider flex items-center gap-1.5">
+            <Barcode className="w-4 h-4 text-[#2563EB]" />
+            Scannable Barcode / Serial Label
+          </div>
+          <div className="w-72 max-w-full bg-white p-2.5 border border-slate-200 rounded-lg shadow-2xs">
+            <svg viewBox={`0 0 ${encoded.totalWidth} 32`} preserveAspectRatio="none" className="w-full h-12">
+              {encoded.bars.map((b, i) => (
+                <rect key={i} x={b.x} y={0} width={b.width} height={32} fill="#000" />
+              ))}
+            </svg>
+            <div className="font-mono text-xs font-bold text-[#172B4D] mt-1.5 tracking-widest">{barcodeValue}</div>
+          </div>
         </div>
 
         {/* Financial & Pricing Summary Grid */}
@@ -109,13 +130,24 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </div>
 
         {/* Action Footer */}
-        <div className="flex justify-end gap-2 pt-2 border-t border-[#D8E1EC]">
-          <button
-            onClick={() => { onClose(); onEdit(product); }}
-            className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-          >
-            <Edit className="w-4 h-4" /> Edit Product Details
-          </button>
+        <div className="flex justify-between items-center gap-2 pt-2 border-t border-[#D8E1EC]">
+          {onPrintBarcode && (
+            <button
+              onClick={() => { onClose(); onPrintBarcode(product); }}
+              className="px-3.5 py-2 bg-white border border-[#D8E1EC] hover:bg-[#F8FAFC] text-[#172B4D] rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-[#D97706]" /> Print Barcode Label
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => { onClose(); onEdit(product); }}
+              className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Edit className="w-4 h-4" /> Edit Product Details
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
