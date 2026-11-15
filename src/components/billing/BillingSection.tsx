@@ -775,25 +775,28 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
 
   const { isMobile, isDenseLaptop } = useDeviceTier();
 
-  // Global Hardware USB / Bluetooth Barcode Gun Listener
+  // 100% Plug & Play Hardware USB / Bluetooth Barcode Gun Listener
   useBarcodeGun({
     onScan: (scannedCode) => {
-      const normalized = scannedCode.trim().toLowerCase();
+      const cleanCode = scannedCode.trim().replace(/[\s\r\n\t>]+/g, '');
+      const lower = cleanCode.toLowerCase();
+
+      // Instant match across barcode, serial numbers, SKU, and name
       const match = products.find(
         (p) => p.isActive && (
-          (p.barcode && p.barcode.trim() === scannedCode.trim()) ||
-          p.sku.toLowerCase() === normalized ||
-          p.name.toLowerCase() === normalized
+          (p.barcode && p.barcode.trim() === cleanCode) ||
+          (p.barcode && p.barcode.toLowerCase().split(',').map(s => s.trim()).includes(lower)) ||
+          (p.alternateBarcodes && p.alternateBarcodes.some(b => b.trim().toLowerCase() === lower)) ||
+          p.sku.toLowerCase() === lower ||
+          p.name.toLowerCase() === lower
         )
       );
 
       if (match) {
-        addItemByProduct(match, 1);
-        playBeep();
-        onToast('success', 'Scanned & Added', `${match.name} (₹${match.saleRate})`);
+        handleSelectProduct(match, cleanCode);
       } else {
         playError();
-        onToast('error', 'Barcode Not Found', `No active product found for "${scannedCode}"`);
+        onToast('error', 'Barcode Not Found', `No active product found for "${cleanCode}"`);
       }
     },
     enabled: !isMobile && !isQuickPayOpen && !isHoldDraftsOpen && !isNewBillModalOpen

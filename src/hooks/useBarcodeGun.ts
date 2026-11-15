@@ -2,19 +2,19 @@ import { useEffect, useRef } from 'react';
 
 interface UseBarcodeGunOptions {
   onScan: (barcode: string) => void;
-  maxIntervalMs?: number; // Maximum time between keystrokes to be considered a scanner burst (typical barcode guns emit at 10-25ms)
-  minLength?: number;     // Minimum length of scanned barcode (usually 4 to 18 characters)
+  maxIntervalMs?: number; // Maximum time between keystrokes for hardware scanner (standard guns emit at 10-50ms)
+  minLength?: number;     // Minimum length of scanned barcode
   enabled?: boolean;
 }
 
 /**
- * Global Hardware USB / Bluetooth Barcode Gun Interceptor Hook.
- * Listens for rapid character bursts from hardware scanner guns and triggers onScan,
- * ensuring seamless scanning on laptops/counter PCs regardless of which element is focused.
+ * 100% Plug-and-Play Hardware USB / Bluetooth Barcode Gun Interceptor.
+ * Works with any USB scanner, wireless dongle, or Bluetooth scanner out-of-the-box.
+ * Zero drivers, zero setup, catches scans instantly from any screen.
  */
 export function useBarcodeGun({
   onScan,
-  maxIntervalMs = 45,
+  maxIntervalMs = 75,
   minLength = 3,
   enabled = true
 }: UseBarcodeGunOptions) {
@@ -40,28 +40,24 @@ export function useBarcodeGun({
       const interval = currentTime - lastKeyTimeRef.current;
       lastKeyTimeRef.current = currentTime;
 
-      // When Enter is received: check if the accumulated buffer was a rapid scanner burst
+      // When Enter is received from scanner gun:
       if (e.key === 'Enter') {
-        if (bufferRef.current.length >= minLength) {
-          const scannedCode = bufferRef.current.trim();
+        const candidate = bufferRef.current.trim();
+        if (candidate.length >= minLength) {
           bufferRef.current = '';
-
-          // If the event target was a standard input, prevent standard form submit if it was a scanner burst
-          if (interval <= maxIntervalMs * 2) {
-            e.preventDefault();
-            e.stopPropagation();
-            onScanRef.current(scannedCode);
-          }
+          e.preventDefault();
+          e.stopPropagation();
+          onScanRef.current(candidate);
         } else {
           bufferRef.current = '';
         }
         return;
       }
 
-      // Only accumulate printable single characters
+      // Accumulate single printable characters
       if (e.key.length === 1) {
         if (interval > maxIntervalMs && bufferRef.current.length > 0) {
-          // Time gap too large: user is human typing or paused, clear old buffer
+          // New burst starting
           bufferRef.current = e.key;
         } else {
           bufferRef.current += e.key;

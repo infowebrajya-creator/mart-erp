@@ -71,3 +71,4 @@ console.log(`   └─ Layout: ${thermalStickerWidthMm}mm x ${thermalStickerHeig
 console.log('\n====================================================');
 console.log('ALL SERIAL & HARDWARE PERIPHERAL VERIFICATIONS PASSED');
 console.log('====================================================');
+
