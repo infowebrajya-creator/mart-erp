@@ -303,27 +303,12 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       const client = getSupabaseClient();
 
       if (client) {
-        // 1. Incremental Delta-Sync Query: Only pull modified records if local cache exists
-        const lastInvoiceSyncKey = 'webrajya_last_invoice_sync_time';
-        const lastSync = typeof window !== 'undefined' ? localStorage.getItem(lastInvoiceSyncKey) : null;
-
-        let query = client
+        // Direct Cloud Query for Latest Invoices
+        const { data: remoteInvoices, error: fetchErr } = await client
           .from('invoices')
           .select('*, invoice_items(*)')
-          .order('created_at', { ascending: false });
-
-        if (lastSync && initialLocal.length > 0 && isSilent) {
-          // Delta query: only rows updated since previous sync
-          query = query.gt('updated_at', lastSync).limit(100);
-        } else {
-          // Recent 100 invoices on full initial load (slashes REST egress by 80%)
-          query = query.limit(100);
-        }
-
-        const { data: remoteInvoices, error: fetchErr } = await query;
-        if (typeof window !== 'undefined' && !fetchErr) {
-          localStorage.setItem(lastInvoiceSyncKey, new Date().toISOString());
-        }
+          .order('created_at', { ascending: false })
+          .limit(100);
 
         if (!fetchErr && remoteInvoices) {
           const mapped = remoteInvoices.map(mapRemoteInvoiceToLocal);

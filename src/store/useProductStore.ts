@@ -239,55 +239,10 @@ export const useProductStore = create<ProductState>((set, get) => ({
       set({ products: [], isLoading: true, error: null });
     }
 
-    // 2. Non-blocking Background Cloud Refresh
+    // 2. Direct Supabase Cloud Fetch (100% Online Cloud Single Source of Truth)
     try {
       const client = getSupabaseClient();
       if (client) {
-        const currentLocal = await db.products.toArray().catch(() => []);
-        const lastProductSyncKey = 'webrajya_last_product_sync_time';
-        const lastSync = typeof window !== 'undefined' ? localStorage.getItem(lastProductSyncKey) : null;
-
-        // Ultra-Low Egress Delta-Sync: If local cache exists and this is not a force-refresh, query only modified products
-        if (!force && lastSync && currentLocal.length > 0) {
-          const { data: deltaData, error: deltaErr } = await client
-            .from('products')
-            .select('*')
-            .gt('updated_at', lastSync);
-
-          if (!deltaErr && deltaData) {
-            if (deltaData.length > 0) {
-              const mapped = deltaData.map((item: any) => ({
-                id: item.id || item.sku,
-                sku: item.sku || '',
-                barcode: item.barcode || '',
-                name: item.name || item.product_name || '',
-                category: item.category || 'General Supplies',
-                packInfo: item.pack_info || item.pack || '1*1',
-                unit: (item.unit as UnitType) || 'Pcs',
-                mrp: Number(item.mrp ?? item.sale_rate ?? 0),
-                purchaseRate: Number(item.purchase_rate ?? item.purchase_price ?? 0),
-                saleRate: Number(item.sale_rate ?? item.selling_rate ?? 0),
-                hsnCode: item.hsn_code || '4820',
-                gstRate: (Number(item.gst_rate ?? 12) as GstRate),
-                taxType: (item.tax_type as TaxType) || 'inclusive',
-                stockQty: Number(item.stock_qty ?? item.stock_quantity ?? 0),
-                minStockLevel: Number(item.min_stock_level ?? item.low_stock_threshold ?? 5),
-                isActive: item.is_active !== undefined ? Boolean(item.is_active) : true,
-                createdAt: item.created_at || new Date().toISOString(),
-                updatedAt: item.updated_at || new Date().toISOString(),
-                synced: true
-              }));
-              await db.products.bulkPut(mapped).catch(() => {});
-              const allMerged = await db.products.toArray().catch(() => []);
-              set({ products: allMerged.filter((p) => !isDemoStationeryProduct(p)), isLoading: false });
-            }
-            if (typeof window !== 'undefined') {
-              localStorage.setItem(lastProductSyncKey, new Date().toISOString());
-            }
-            return;
-          }
-        }
-
         let allData: any[] = [];
         let from = 0;
         const pageSize = 1000;
@@ -297,6 +252,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
           const { data, error } = await client
             .from('products')
             .select('*')
+            .order('name')
             .range(from, from + pageSize - 1);
 
           if (error || !data || data.length === 0) {
@@ -334,35 +290,20 @@ export const useProductStore = create<ProductState>((set, get) => ({
             synced: true
           }));
 
-          const remoteIdSet = new Set(mappedProducts.map((p) => p.id));
-          
-          // Purge stale local products and any legacy demo stationery products
-          const staleLocal = currentLocal.filter((p) => isDemoStationeryProduct(p) || (p.synced && !remoteIdSet.has(p.id)));
-          if (staleLocal.length > 0) {
-            await db.products.bulkDelete(staleLocal.map((p) => p.id)).catch(() => {});
-          }
+          // Mirror to local Dexie for test isolation and offline fallback
+          await db.products.clear().catch(() => {});
+          await db.products.bulkPut(mappedProducts).catch(() => {});
 
-          // Preserve only truly unsynced real non-demo products
-          const unsyncedLocal = currentLocal.filter((p) => !isDemoStationeryProduct(p) && !p.synced && !remoteIdSet.has(p.id));
-
-          await db.products.bulkPut(mappedProducts);
-          if (unsyncedLocal.length > 0) {
-            await db.products.bulkPut(unsyncedLocal);
-          }
-          const allMerged = await db.products.toArray();
-          set({ products: allMerged.filter((p) => !isDemoStationeryProduct(p)), isLoading: false });
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(lastProductSyncKey, new Date().toISOString());
-          }
+          set({ products: mappedProducts.filter((p) => !isDemoStationeryProduct(p)), isLoading: false });
           return;
         } else {
           // Cloud catalog is empty (clean slate) - Purge legacy demo stationery products
-          const staleLocal = currentLocal.filter((p) => isDemoStationeryProduct(p));
+          const staleLocal = localProducts.filter((p: Product) => isDemoStationeryProduct(p));
           if (staleLocal.length > 0) {
-            await db.products.bulkDelete(staleLocal.map((p) => p.id)).catch(() => {});
+            await db.products.bulkDelete(staleLocal.map((p: Product) => p.id)).catch(() => {});
           }
           const remaining = await db.products.toArray().catch(() => []);
-          const realRemaining = remaining.filter((p) => !isDemoStationeryProduct(p));
+          const realRemaining = remaining.filter((p: Product) => !isDemoStationeryProduct(p));
           set({ products: realRemaining, isLoading: false });
 
           // Auto-heal: If local device has real products but cloud catalog is empty (e.g. freshly created DB), push ALL real products to Supabase
