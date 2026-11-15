@@ -129,6 +129,21 @@ export const InventorySection: React.FC<InventorySectionProps> = ({ onToast }) =
             await db.stockMovements.put(m).catch(() => {});
           }
           logs = await db.stockMovements.orderBy('createdAt').reverse().limit(50).toArray().catch(() => []);
+        } else if (logs.length > 0) {
+          // Cloud has 0 movements, push local movements up so deployed/remote counters see history
+          const toPush = logs.slice(0, 50).map(m => ({
+            id: m.id,
+            product_id: m.productId,
+            product_name: m.productName,
+            type: m.type,
+            quantity_change: Number(m.quantityChange),
+            previous_stock: Number(m.previousStock || 0),
+            new_stock: Number(m.newStock || 0),
+            reason: m.reason,
+            reference_id: m.referenceId || null,
+            created_at: m.createdAt
+          }));
+          await client.from('stock_movements').upsert(toPush, { onConflict: 'id' });
         }
       }
     } catch (_) {}

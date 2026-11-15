@@ -421,8 +421,8 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
 
   const handleSyncToCloud = async () => {
     onToast('info', 'Sync Started', 'Pushing local products and invoices to Supabase...');
-    const prodRes = await syncProducts();
-    const invRes = await syncInvoices();
+    const prodRes = await syncProducts(true);
+    const invRes = await syncInvoices(true);
     
     if (prodRes.success && invRes.success) {
       onToast('success', 'Sync Complete!', `${prodRes.message} | ${invRes.message}`);

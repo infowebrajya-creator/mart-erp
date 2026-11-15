@@ -32,7 +32,7 @@ interface SalesState {
     returnReason: string;
   }) => Promise<Invoice>;
   cancelInvoice: (invoiceId: string, restoreStock?: boolean, reason?: string) => Promise<void>;
-  syncInvoicesWithSupabase: () => Promise<{ success: boolean; message: string }>;
+  syncInvoicesWithSupabase: (forceAll?: boolean) => Promise<{ success: boolean; message: string }>;
   clearAllSalesData: (alsoClearSupabase?: boolean) => Promise<void>;
 }
 
@@ -345,16 +345,35 @@ export const useSalesStore = create<SalesState>((set, get) => ({
             await db.invoices.bulkDelete(localTestInvs.map((t) => t.id)).catch(() => {});
           }
 
-          // Purge stale ghost/test invoices that are marked synced but do not exist in current Supabase DB
+          // Purge stale ghost/test invoices only when remote actually returned active records
           const remainingLocal = localInvoices.filter((i) => !isTestInvoice(i));
-          const staleSynced = remainingLocal.filter((i) => i.synced && !remoteIdSet.has(i.id));
-          if (staleSynced.length > 0) {
-            await db.invoices.bulkDelete(staleSynced.map(s => s.id)).catch(() => {});
-          }
-
-          // Update local Dexie storage with active remote invoices
           if (mapped.length > 0) {
+            const staleSynced = remainingLocal.filter((i) => i.synced && !remoteIdSet.has(i.id));
+            if (staleSynced.length > 0) {
+              await db.invoices.bulkDelete(staleSynced.map(s => s.id)).catch(() => {});
+            }
             await db.invoices.bulkPut(mapped).catch(() => {});
+          } else if (remainingLocal.length > 0) {
+            // Cloud has 0 invoices (clean slate DB) - Push all valid local invoices to Supabase
+            for (const un of remainingLocal) {
+              try {
+                await ensureProductsExistInSupabase(client, un.items);
+                const { invoiceRow, itemRows } = mapLocalInvoiceToRemote(un);
+                const { error: upErr } = await client.from('invoices').upsert(invoiceRow, { onConflict: 'id' });
+                if (!upErr) {
+                  if (itemRows.length > 0) {
+                    let { error: itemErr } = await client.from('invoice_items').upsert(itemRows, { onConflict: 'id' });
+                    if (itemErr && (itemErr.message?.includes('remark') || itemErr.code === 'PGRST204')) {
+                      const fallbackRows = itemRows.map(({ remark, ...rest }: any) => rest);
+                      await client.from('invoice_items').upsert(fallbackRows, { onConflict: 'id' });
+                    }
+                  }
+                  await db.invoices.update(un.id, { synced: true }).catch(() => {});
+                }
+              } catch (pushErr) {
+                console.warn('Auto-heal invoice push notice:', pushErr);
+              }
+            }
           }
 
           // Only keep truly unsynced pending local invoices (created offline, synced !== true)
@@ -951,15 +970,16 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     }
   },
 
-  syncInvoicesWithSupabase: async () => {
+  syncInvoicesWithSupabase: async (forceAll: boolean = false) => {
     const client = getSupabaseClient();
     if (!client) {
       return { success: false, message: 'Supabase not configured' };
     }
 
     try {
-      // 1. Push all unsynced local invoices to cloud
-      const unSynced = await db.invoices.filter((i) => !i.synced).toArray();
+      // 1. Push local invoices to cloud
+      const allLocal = await db.invoices.toArray().catch(() => []);
+      const unSynced = forceAll ? allLocal : allLocal.filter((i) => !i.synced);
       let pushCount = 0;
 
       for (const un of unSynced) {

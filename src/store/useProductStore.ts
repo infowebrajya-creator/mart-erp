@@ -27,7 +27,7 @@ interface ProductState {
   removeProductFromCloud: (id: string) => Promise<void>;
   seedDefaultProducts: () => Promise<number>;
   commitBatchImport: (rowsToCommit: ValidatedImportRow[], mode: ImportMode) => Promise<ImportSummaryResult>;
-  syncWithSupabase: () => Promise<{ success: boolean; message: string }>;
+  syncWithSupabase: (forceAll?: boolean) => Promise<{ success: boolean; message: string }>;
 }
 
 const LEGACY_DEMO_SKUS = new Set([
@@ -365,8 +365,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
           const realRemaining = remaining.filter((p) => !isDemoStationeryProduct(p));
           set({ products: realRemaining, isLoading: false });
 
-          // Auto-heal: If local device has real unsynced products, push them to Supabase
-          const toPush = realRemaining.filter((p) => !p.synced);
+          // Auto-heal: If local device has real products but cloud catalog is empty (e.g. freshly created DB), push ALL real products to Supabase
+          const toPush = realRemaining;
           if (toPush.length > 0) {
             try {
               const payloads = toPush.map((p) => ({
@@ -816,14 +816,16 @@ export const useProductStore = create<ProductState>((set, get) => ({
     };
   },
 
-  syncWithSupabase: async () => {
+  syncWithSupabase: async (forceAll: boolean = false) => {
     const client = getSupabaseClient();
     if (!client) {
       return { success: false, message: 'Supabase is not configured. Go to Settings to set URL and Key.' };
     }
 
     try {
-      const unSynced = await db.products.filter(p => !p.synced).toArray();
+      const allLocal = await db.products.toArray().catch(() => []);
+      const realLocal = allLocal.filter(p => !isDemoStationeryProduct(p));
+      const unSynced = forceAll ? realLocal : realLocal.filter(p => !p.synced);
       if (unSynced.length === 0) {
         return { success: true, message: 'All products are already in sync with Supabase.' };
       }

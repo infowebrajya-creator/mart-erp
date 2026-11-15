@@ -4,6 +4,8 @@ import {
   Monitor, Laptop, Tablet, Zap, ShieldCheck, Database, X, ArrowRight, Clock
 } from 'lucide-react';
 import { useRealtimeStore, initializeRealtimeLiveSync, flushOfflineBuffer, measureRealtimeLatency } from '../../lib/realtimeSync';
+import { useProductStore } from '../../store/useProductStore';
+import { useSalesStore } from '../../store/useSalesStore';
 
 interface MultiDeviceSyncModalProps {
   isOpen: boolean;
@@ -31,9 +33,11 @@ export function MultiDeviceSyncModal({ isOpen, onClose, onNavigateToSettings }: 
     setSyncFeedback(null);
     try {
       initializeRealtimeLiveSync();
+      await useProductStore.getState().syncWithSupabase(true);
+      await useSalesStore.getState().syncInvoicesWithSupabase(true);
       await flushOfflineBuffer();
       await measureRealtimeLatency();
-      setSyncFeedback('All local transactions and records synchronized successfully!');
+      setSyncFeedback('All local catalog items, stock, and transactions pushed to Supabase Cloud!');
     } catch (err: any) {
       setSyncFeedback(`Sync note: ${err?.message || 'Synchronized'}`);
     } finally {
