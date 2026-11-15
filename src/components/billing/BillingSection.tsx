@@ -232,41 +232,58 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     }).slice(0, 15);
   }, [products, fastSearch]);
 
-  // Fast Product Pick Action
+  // Fast Product Pick Action: Direct Search & Add (Qty, Rate, Remark are optional)
   const handleSelectProduct = (prod: Product) => {
-    setSelectedProduct(prod);
-    setFastSearch(prod.name);
-    setFastRate(prod.saleRate);
-    setFastQty(1);
-    setFastFreeQty(0);
-    setFastRemark('');
+    const qtyToAdd = fastQty > 0 ? fastQty : 1;
+    const freeQtyToAdd = fastFreeQty > 0 ? fastFreeQty : 0;
+    const remarkToAdd = fastRemark.trim();
+
+    addItemByProduct(prod, qtyToAdd, 0, 0, freeQtyToAdd, remarkToAdd);
+    playBeep();
+    resetFastInputs();
     setShowSuggestions(false);
+    onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}" to bill.`);
     setTimeout(() => {
-      qtyInputRef.current?.focus();
-      qtyInputRef.current?.select();
+      barcodeInputRef.current?.focus();
     }, 50);
   };
 
   const handleQtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === 'Tab') {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      rateInputRef.current?.focus();
-      rateInputRef.current?.select();
+      if (selectedProduct) {
+        handleSelectProduct(selectedProduct);
+      } else if (matchingProducts.length > 0) {
+        handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+      } else {
+        barcodeInputRef.current?.focus();
+      }
     }
   };
 
   const handleRateKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === 'Tab') {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      itemRemarkInputRef.current?.focus();
-      itemRemarkInputRef.current?.select();
+      if (selectedProduct) {
+        handleSelectProduct(selectedProduct);
+      } else if (matchingProducts.length > 0) {
+        handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+      } else {
+        barcodeInputRef.current?.focus();
+      }
     }
   };
 
   const handleItemRemarkKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleAddFastItem();
+      if (selectedProduct) {
+        handleSelectProduct(selectedProduct);
+      } else if (matchingProducts.length > 0) {
+        handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+      } else {
+        barcodeInputRef.current?.focus();
+      }
     }
   };
 
@@ -283,11 +300,10 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
         return;
       }
       if (e.key === 'Enter') {
-        if (matchingProducts[suggestionIndex]) {
-          e.preventDefault();
-          handleSelectProduct(matchingProducts[suggestionIndex]);
-          return;
-        }
+        e.preventDefault();
+        const prod = matchingProducts[suggestionIndex] || matchingProducts[0];
+        handleSelectProduct(prod);
+        return;
       }
       if (e.key === 'Escape') {
         setShowSuggestions(false);
@@ -388,6 +404,18 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
       playBeep();
       resetFastInputs();
       onToast('success', 'Product Added', `Added "${matchingSku.name}" to bill.`);
+      return;
+    }
+
+    // Matching Products from live search suggestions (name/substring match)
+    if (matchingProducts.length > 0) {
+      const prod = matchingProducts[suggestionIndex] || matchingProducts[0];
+      const qtyToAdd = fastQty > 0 ? fastQty : 1;
+      addItemByProduct(prod, qtyToAdd, 0, 0, fastFreeQty, fastRemark.trim());
+      playBeep();
+      resetFastInputs();
+      setShowSuggestions(false);
+      onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}" to bill.`);
       return;
     }
 
