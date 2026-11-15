@@ -14,7 +14,6 @@ import { calculateInvoiceTotals } from '../../lib/taxCalculator';
 import { ProductPickerModal } from './ProductPickerModal';
 import { HoldDraftsModal } from './HoldDraftsModal';
 import { QuickPayModal } from './QuickPayModal';
-import { A5PrintPreviewModal } from './A5PrintPreviewModal';
 import { AddCustomerModal } from './AddCustomerModal';
 import { NewBillRemarkModal } from './NewBillRemarkModal';
 import { useDeviceTier } from '../../utils/useDeviceTier';
@@ -78,9 +77,7 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
   const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
   const [isHoldDraftsOpen, setIsHoldDraftsOpen] = useState(false);
   const [isQuickPayOpen, setIsQuickPayOpen] = useState(false);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isNewBillModalOpen, setIsNewBillModalOpen] = useState(false);
-  const [completedInvoice, setCompletedInvoice] = useState<Invoice | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [challanPurpose, setChallanPurpose] = useState<'job_work' | 'godown_transfer' | 'approval' | 'others'>('approval');
   const [isShortcutsDrawerOpen, setIsShortcutsDrawerOpen] = useState(false);
@@ -474,11 +471,8 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
         if (printRes?.method === 'usb') {
           onToast('info', 'Silent USB Print', 'Sent direct to thermal printer with auto-cut');
         }
-        setTimeout(() => barcodeInputRef.current?.focus(), 150);
-      } else {
-        setCompletedInvoice(inv);
-        setIsPreviewOpen(true);
       }
+      setTimeout(() => barcodeInputRef.current?.focus(), 150);
       return inv;
     } catch (err: any) {
       onToast('error', 'Failed to Save Invoice', err.message || 'Server connection error. Cart preserved.');
@@ -596,8 +590,6 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
       playCashChime();
 
       if (shouldPrint) {
-        setCompletedInvoice(inv);
-        setIsPreviewOpen(true);
         triggerInvoicePrint(inv, shopProfile, printSettings);
         onToast('success', `Bill #${inv.invoiceNumber} Saved & Printed!`, `Total: ₹${inv.netPayable.toLocaleString('en-IN')}`);
       } else if (shareWhatsApp) {
@@ -611,6 +603,7 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
       } else {
         onToast('success', `Bill #${inv.invoiceNumber} Saved!`, `Net Payable: ₹${inv.netPayable.toLocaleString('en-IN')}`);
       }
+      setTimeout(() => barcodeInputRef.current?.focus(), 150);
     } catch (err: any) {
       playError();
       onToast('error', 'Failed to Save Invoice', err.message || 'Cart preserved.');
@@ -719,7 +712,7 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
         onToast('error', 'Barcode Not Found', `No active product found for "${scannedCode}"`);
       }
     },
-    enabled: !isMobile && !isQuickPayOpen && !isPreviewOpen && !isHoldDraftsOpen && !isNewBillModalOpen
+    enabled: !isMobile && !isQuickPayOpen && !isHoldDraftsOpen && !isNewBillModalOpen
   });
 
   if (isMobile) {
@@ -767,17 +760,6 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
           onClose={() => setIsNewBillModalOpen(false)}
           initialRemark={notes}
           onConfirm={handleConfirmNewBillRemark}
-        />
-
-        <A5PrintPreviewModal
-          isOpen={isPreviewOpen}
-          onClose={() => {
-            setIsPreviewOpen(false);
-            setTimeout(() => barcodeInputRef.current?.focus(), 150);
-          }}
-          invoice={completedInvoice}
-          shopProfile={shopProfile}
-          printSettings={printSettings}
         />
 
         <HoldDraftsModal
@@ -1618,17 +1600,6 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
         onClose={() => setIsNewBillModalOpen(false)}
         initialRemark={notes}
         onConfirm={handleConfirmNewBillRemark}
-      />
-
-      <A5PrintPreviewModal
-        isOpen={isPreviewOpen}
-        onClose={() => {
-          setIsPreviewOpen(false);
-          setTimeout(() => barcodeInputRef.current?.focus(), 150);
-        }}
-        invoice={completedInvoice}
-        shopProfile={shopProfile}
-        printSettings={printSettings}
       />
 
       <AddCustomerModal
