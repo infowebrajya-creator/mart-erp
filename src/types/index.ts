@@ -192,6 +192,7 @@ export interface BillingSettings {
   enableIgst: boolean;
   whatsappFormat: WhatsAppReceiptFormat;
   whatsappPdfStyle: WhatsAppPdfStyle;
+  quickSearchAdd?: boolean;
 }
 
 export interface SupabaseConfig {

@@ -1115,6 +1115,50 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
               </div>
             </div>
 
+            {/* Fast Billing Workflow & Optional Fields Switch */}
+            <div>
+              <div className="border-b border-[#D8E1EC] pb-2 mb-3">
+                <h3 className="text-sm font-extrabold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-[#2563EB]" />
+                  Fast Billing & Product Entry Workflow
+                </h3>
+              </div>
+              <p className="text-xs text-[#64748B] mb-3">
+                Configure whether scanning or selecting a product adds it instantly or navigates through quantity, rates, and remarks.
+              </p>
+
+              <div className="p-4 bg-white border border-[#D8E1EC] rounded-xl flex items-center justify-between shadow-2xs hover:border-[#94A3B8] transition-all">
+                <div className="pr-4 space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm font-extrabold text-[#172B4D]">
+                      Qty, Free, Rate, and Remark Are Purely Optional:
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                      billingForm.quickSearchAdd !== false
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
+                      {billingForm.quickSearchAdd !== false ? 'Enabled (Fast Add)' : 'Disabled (Step-by-Step)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#64748B] leading-relaxed">
+                    {billingForm.quickSearchAdd !== false
+                      ? 'When enabled, scanning or selecting an item instantly adds it to the bill with Qty 1 and refocuses search. Quantity, Free, Rate, and Remark are purely optional.'
+                      : 'When disabled, selecting an item populates the input bar and lets you navigate sequentially through Qty → Rate → Remark with the Enter key before adding.'}
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={billingForm.quickSearchAdd !== false}
+                    onChange={(e) => handleToggleBillingSetting('quickSearchAdd', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2563EB]"></div>
+                </label>
+              </div>
+            </div>
+
             {/* Counter Document Display Settings */}
             <div>
               <div className="border-b border-[#D8E1EC] pb-2 mb-3">

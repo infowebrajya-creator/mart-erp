@@ -77,7 +77,8 @@ export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   enableEstimate: false,
   enableIgst: true,
   whatsappFormat: 'text',
-  whatsappPdfStyle: 'a5'
+  whatsappPdfStyle: 'a5',
+  quickSearchAdd: true
 };
 
 export const DEFAULT_SUPABASE_CONFIG: SupabaseConfig = {

@@ -232,31 +232,52 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     }).slice(0, 15);
   }, [products, fastSearch]);
 
-  // Fast Product Pick Action: Direct Search & Add (Qty, Rate, Remark are optional)
-  const handleSelectProduct = (prod: Product) => {
-    const qtyToAdd = fastQty > 0 ? fastQty : 1;
-    const freeQtyToAdd = fastFreeQty > 0 ? fastFreeQty : 0;
-    const remarkToAdd = fastRemark.trim();
+  // Fast Product Pick Action: Configurable Fast Add vs Step-by-Step Entry
+  const isQuickSearchAdd = billingSettings?.quickSearchAdd !== false;
 
-    addItemByProduct(prod, qtyToAdd, 0, 0, freeQtyToAdd, remarkToAdd);
-    playBeep();
-    resetFastInputs();
-    setShowSuggestions(false);
-    onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}" to bill.`);
-    setTimeout(() => {
-      barcodeInputRef.current?.focus();
-    }, 50);
+  const handleSelectProduct = (prod: Product) => {
+    if (isQuickSearchAdd) {
+      // Instant Mode: Qty, Free, Rate, and Remark are purely optional
+      const qtyToAdd = fastQty > 0 ? fastQty : 1;
+      const freeQtyToAdd = fastFreeQty > 0 ? fastFreeQty : 0;
+      const remarkToAdd = fastRemark.trim();
+
+      addItemByProduct(prod, qtyToAdd, 0, 0, freeQtyToAdd, remarkToAdd);
+      playBeep();
+      resetFastInputs();
+      setShowSuggestions(false);
+      onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}" to bill.`);
+      setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 50);
+    } else {
+      // Step-by-Step Mode: populate inputs and move focus to Qty
+      setSelectedProduct(prod);
+      setFastSearch(prod.name);
+      setFastRate(prod.saleRate);
+      setFastQty(1);
+      setShowSuggestions(false);
+      setTimeout(() => {
+        qtyInputRef.current?.focus();
+        qtyInputRef.current?.select();
+      }, 50);
+    }
   };
 
   const handleQtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (selectedProduct) {
-        handleSelectProduct(selectedProduct);
-      } else if (matchingProducts.length > 0) {
-        handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+      if (!isQuickSearchAdd) {
+        rateInputRef.current?.focus();
+        rateInputRef.current?.select();
       } else {
-        barcodeInputRef.current?.focus();
+        if (selectedProduct) {
+          handleSelectProduct(selectedProduct);
+        } else if (matchingProducts.length > 0) {
+          handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+        } else {
+          barcodeInputRef.current?.focus();
+        }
       }
     }
   };
@@ -264,12 +285,16 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
   const handleRateKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (selectedProduct) {
-        handleSelectProduct(selectedProduct);
-      } else if (matchingProducts.length > 0) {
-        handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+      if (!isQuickSearchAdd) {
+        itemRemarkInputRef.current?.focus();
       } else {
-        barcodeInputRef.current?.focus();
+        if (selectedProduct) {
+          handleSelectProduct(selectedProduct);
+        } else if (matchingProducts.length > 0) {
+          handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+        } else {
+          barcodeInputRef.current?.focus();
+        }
       }
     }
   };
@@ -277,12 +302,31 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
   const handleItemRemarkKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (selectedProduct) {
-        handleSelectProduct(selectedProduct);
-      } else if (matchingProducts.length > 0) {
-        handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+      if (!isQuickSearchAdd) {
+        if (selectedProduct) {
+          const qtyToAdd = fastQty > 0 ? fastQty : 1;
+          const freeQtyToAdd = fastFreeQty > 0 ? fastFreeQty : 0;
+          const customProduct = fastRate > 0 && fastRate !== selectedProduct.saleRate
+            ? { ...selectedProduct, saleRate: fastRate }
+            : selectedProduct;
+          addItemByProduct(customProduct, qtyToAdd, 0, 0, freeQtyToAdd, fastRemark.trim());
+          playBeep();
+          resetFastInputs();
+          onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${selectedProduct.name}" to bill.`);
+          setTimeout(() => {
+            barcodeInputRef.current?.focus();
+          }, 50);
+        } else {
+          handleAddFastItem();
+        }
       } else {
-        barcodeInputRef.current?.focus();
+        if (selectedProduct) {
+          handleSelectProduct(selectedProduct);
+        } else if (matchingProducts.length > 0) {
+          handleSelectProduct(matchingProducts[suggestionIndex] || matchingProducts[0]);
+        } else {
+          barcodeInputRef.current?.focus();
+        }
       }
     }
   };
@@ -346,9 +390,16 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     }
 
     if (selectedProduct) {
-      addItemByProduct(selectedProduct, fastQty, 0, 0, fastFreeQty, fastRemark.trim());
+      const customProduct = fastRate > 0 && fastRate !== selectedProduct.saleRate
+        ? { ...selectedProduct, saleRate: fastRate }
+        : selectedProduct;
+      addItemByProduct(customProduct, fastQty > 0 ? fastQty : 1, 0, 0, fastFreeQty, fastRemark.trim());
       playBeep();
       resetFastInputs();
+      onToast('success', 'Product Added', `Added "${selectedProduct.name}" to bill.`);
+      setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 50);
       return;
     }
 
@@ -379,11 +430,7 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     }
 
     if (matchingBarcodes.length === 1) {
-      const prod = matchingBarcodes[0];
-      addItemByProduct(prod, fastQty, 0, 0, fastFreeQty, fastRemark.trim());
-      playBeep();
-      resetFastInputs();
-      onToast('success', 'Product Added', `Added "${prod.name}" to bill.`);
+      handleSelectProduct(matchingBarcodes[0]);
       return;
     }
 
@@ -400,22 +447,14 @@ export const BillingSection: React.FC<BillingSectionProps> = ({ onToast, onOpenA
     }
 
     if (matchingSku) {
-      addItemByProduct(matchingSku, fastQty, 0, 0, fastFreeQty, fastRemark.trim());
-      playBeep();
-      resetFastInputs();
-      onToast('success', 'Product Added', `Added "${matchingSku.name}" to bill.`);
+      handleSelectProduct(matchingSku);
       return;
     }
 
     // Matching Products from live search suggestions (name/substring match)
     if (matchingProducts.length > 0) {
       const prod = matchingProducts[suggestionIndex] || matchingProducts[0];
-      const qtyToAdd = fastQty > 0 ? fastQty : 1;
-      addItemByProduct(prod, qtyToAdd, 0, 0, fastFreeQty, fastRemark.trim());
-      playBeep();
-      resetFastInputs();
-      setShowSuggestions(false);
-      onToast('success', 'Product Added', `Added ${qtyToAdd > 1 ? `${qtyToAdd}x ` : ''}"${prod.name}" to bill.`);
+      handleSelectProduct(prod);
       return;
     }
 
