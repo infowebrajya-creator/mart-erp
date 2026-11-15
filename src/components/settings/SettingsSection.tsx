@@ -3,7 +3,7 @@ import {
   Store, Save, RefreshCw, Download, Upload, ShieldCheck, Trash2,
   Printer, Receipt, FileText, CheckCircle2, Usb, Scissors, Zap, DollarSign, Info, Monitor,
   Volume2, VolumeX, Bluetooth, ShoppingBag, MessageCircle, Image as ImageIcon,
-  ArrowLeft, ChevronRight, Settings, Sparkles, Key, Eye, EyeOff, ExternalLink
+  ArrowLeft, ChevronRight, Settings, Sparkles, Key, Eye, EyeOff, ExternalLink, Keyboard
 } from 'lucide-react';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useProductStore } from '../../store/useProductStore';
@@ -45,7 +45,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
   const { syncWithSupabase: syncProducts } = useProductStore();
   const { syncInvoicesWithSupabase: syncInvoices } = useSalesStore();
 
-  const [activeTab, setActiveTab] = useState<'shop' | 'billing' | 'print' | 'backup' | 'sound' | 'ai' | null>(null);
+  const [activeTab, setActiveTab] = useState<'shop' | 'billing' | 'print' | 'backup' | 'sound' | 'ai' | 'shortcuts' | null>(null);
   const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(() => 
     typeof window !== 'undefined' ? localStorage.getItem('webrajya_last_backup_date') : null
@@ -606,6 +606,14 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
       icon: <Sparkles className="w-5 h-5 text-[#8B5CF6]" />,
       iconBg: 'bg-purple-50 text-[#8B5CF6] border-purple-200',
       meta: geminiApiKey ? 'Configured' : 'Key Needed'
+    },
+    {
+      id: 'shortcuts' as const,
+      title: 'POS Shortcuts & Hotkeys',
+      subtitle: 'Complete cashier keyboard shortcuts (F2 to F11), barcode gun flow & instant billing',
+      icon: <Keyboard className="w-5 h-5 text-[#2563EB]" />,
+      iconBg: 'bg-blue-50 text-[#2563EB] border-blue-200',
+      meta: 'F2 – F11'
     }
   ];
 
@@ -794,6 +802,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
                 {activeTab === 'backup' && <><Download className="w-4 h-4 text-[#7C3AED]" /> Backup & Restore</>}
                 {activeTab === 'sound' && <><Volume2 className="w-4 h-4 text-[#4F46E5]" /> Sound & Audio</>}
                 {activeTab === 'ai' && <><Sparkles className="w-4 h-4 text-[#8B5CF6]" /> AI & Gemini Configuration</>}
+                {activeTab === 'shortcuts' && <><Keyboard className="w-4 h-4 text-[#2563EB]" /> POS Shortcuts & Hotkeys</>}
               </span>
             </div>
           </div>
@@ -2162,6 +2171,163 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ onToast }) => 
                   <Save className="w-3.5 h-3.5" />
                   <span>Save Configuration</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'shortcuts' && (
+          <div className="max-w-4xl space-y-6">
+            <div className="flex items-center justify-between border-b border-[#D8E1EC] pb-2">
+              <div>
+                <h3 className="text-sm font-extrabold text-[#172B4D] uppercase tracking-wider flex items-center gap-2">
+                  <Keyboard className="w-4 h-4 text-blue-600" /> POS Hotkeys & Cashier Quick Reference
+                </h3>
+                <p className="text-[11px] text-[#64748B] mt-0.5">
+                  Full reference guide for high-speed cashier billing, keyboard hotkeys, and barcode navigation.
+                </p>
+              </div>
+              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+                F2 – F11 Active
+              </span>
+            </div>
+
+            {/* Quick Summary Banner */}
+            <div className="p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Keyboard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-blue-950">Zero-Mouse Billing Engine</h4>
+                  <p className="text-[11px] text-blue-900/80 mt-0.5">
+                    Cashiers can complete a full billing transaction in under 5 seconds using only the keyboard and barcode scanner.
+                  </p>
+                </div>
+              </div>
+              {typeof window !== 'undefined' && !window.electronAPI?.isElectron && (
+                <a
+                  href={WINDOWS_EXE_URL}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shrink-0 shadow-xs transition-colors cursor-pointer"
+                  title="Download WebRajya for Windows (.exe)"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Windows App</span>
+                </a>
+              )}
+            </div>
+
+            {/* Hotkeys Grid */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-extrabold text-[#172B4D] uppercase tracking-wider">
+                Keyboard Hotkeys (F2 to F11)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {[
+                  {
+                    key: 'F2',
+                    label: 'New Bill',
+                    color: 'bg-blue-600 text-white',
+                    desc: 'Opens remark prompt / resets billing cart to start a new sale transaction cleanly.'
+                  },
+                  {
+                    key: 'F3',
+                    label: '+ Client / Customer',
+                    color: 'bg-slate-700 text-white',
+                    desc: 'Quickly select an existing customer or register a new client with GSTIN, phone & address.'
+                  },
+                  {
+                    key: 'F4',
+                    label: 'Search Product Catalog',
+                    color: 'bg-slate-700 text-white',
+                    desc: 'Opens full product picker with category filter, search, price & live stock balance.'
+                  },
+                  {
+                    key: 'F6',
+                    label: 'Toggle GST Mode',
+                    color: 'bg-emerald-600 text-white',
+                    desc: 'Instant toggle between GST Tax Invoice (with CGST/SGST/IGST) and Simple Estimate Bill.'
+                  },
+                  {
+                    key: 'F7',
+                    label: 'Only Save (No Print)',
+                    color: 'bg-emerald-600 text-white',
+                    desc: 'Saves invoice to database, reduces product inventory, without opening printer dialog.'
+                  },
+                  {
+                    key: 'F8',
+                    label: 'Quick Settle (Cash/UPI)',
+                    color: 'bg-emerald-600 text-white',
+                    desc: 'Opens instant payment settlement modal with Cash, UPI, Split payment and tender change.'
+                  },
+                  {
+                    key: 'F9',
+                    label: 'Save & Print Bill',
+                    color: 'bg-amber-500 text-white',
+                    desc: 'Saves bill, adjusts stock, and dispatches instant print job to configured thermal/A5 printer.'
+                  },
+                  {
+                    key: 'F10',
+                    label: 'Hold / Park Draft',
+                    color: 'bg-rose-600 text-white',
+                    desc: 'Parks the current bill in memory so you can serve another customer, then resume anytime.'
+                  },
+                  {
+                    key: 'F11',
+                    label: 'Clear Bill',
+                    color: 'bg-rose-600 text-white',
+                    desc: 'Completely empties current items cart after confirmation.'
+                  }
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-xl flex items-start gap-3 transition-colors"
+                  >
+                    <div className={`px-2.5 py-1 rounded-lg text-xs font-black font-mono shadow-xs shrink-0 ${item.color}`}>
+                      {item.key}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-xs text-[#0F172A]">{item.label}</div>
+                      <div className="text-[11px] text-[#64748B] mt-0.5 leading-relaxed">{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Workflow Tips Card */}
+            <div className="p-4 bg-white border border-[#D8E1EC] rounded-2xl space-y-3">
+              <h4 className="text-xs font-extrabold text-[#172B4D] uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-amber-500" />
+                Barcode Gun & Fast Cashier Pro-Tips
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-[#334155]">
+                <div className="p-3 bg-amber-50/50 border border-amber-200/70 rounded-xl space-y-1">
+                  <div className="font-bold text-[#0F172A] flex items-center gap-1.5">
+                    <span>🔫 Barcode Scanner</span>
+                  </div>
+                  <p className="text-[11px] text-[#64748B] leading-relaxed">
+                    Point & scan any product barcode. The item is automatically added to cart. Scanning again increments quantity by 1.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-blue-50/50 border border-blue-200/70 rounded-xl space-y-1">
+                  <div className="font-bold text-[#0F172A] flex items-center gap-1.5">
+                    <span>↵ Enter Key Navigation</span>
+                  </div>
+                  <p className="text-[11px] text-[#64748B] leading-relaxed">
+                    Press Enter after barcode or product selection to jump straight into Qty, Rate, and Discount fields without reaching for the mouse.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-emerald-50/50 border border-emerald-200/70 rounded-xl space-y-1">
+                  <div className="font-bold text-[#0F172A] flex items-center gap-1.5">
+                    <span>⚡ Instant Settlement</span>
+                  </div>
+                  <p className="text-[11px] text-[#64748B] leading-relaxed">
+                    Press <span className="font-bold text-emerald-700">F8</span> then press Enter to immediately confirm cash payment, or press <span className="font-bold text-amber-700">F9</span> to instantly print.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
