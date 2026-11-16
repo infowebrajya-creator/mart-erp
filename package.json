@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "tsx scripts/comprehensiveFeatureCheck.ts && tsx scripts/preHandoverAudit.ts && tsx scripts/verifyRealtimeMultiDeviceSync.ts && tsx scripts/verifyStockIntegrity.ts && tsx scripts/verifySerialAndHardware.ts",
+    "test": "tsx scripts/comprehensiveFeatureCheck.ts && tsx scripts/preHandoverAudit.ts && tsx scripts/verifyRealtimeMultiDeviceSync.ts && tsx scripts/verifyStockIntegrity.ts && tsx scripts/verifySerialAndHardware.ts && tsx scripts/verifyAiConciseness.ts",
     "electron:dev": "electron .",
     "dist:win": "npm run build && electron-builder --win nsis --x64",
     "dist:dir": "npm run build && electron-builder --dir"

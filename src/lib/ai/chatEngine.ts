@@ -53,13 +53,19 @@ export function parseActionsFromText(rawText: string): AssistantTurnResponse {
   }
 
   // Remove the [ACTION:...] tags from display text
-  const cleanText = rawText.replace(/\[ACTION:[A-Z_]+\]/g, '').trim();
+  let cleanText = rawText.replace(/\[ACTION:[A-Z_]+\]/g, '').trim();
+
+  // Hard Word-Budget Safety: Guarantee max 80 words for ultra-fast reading and token efficiency
+  const words = cleanText.split(/\s+/);
+  if (words.length > 85) {
+    cleanText = words.slice(0, 80).join(' ') + '...';
+  }
 
   return { cleanText, actions };
 }
 
 /**
- * Calls Google Gemini 2.0 Flash with software knowledge and live store context
+ * Calls Google Gemini (optimized for minimal token consumption and 70-80 word answers)
  */
 export async function sendQueryToGeminiCopilot(params: {
   apiKey: string;
@@ -73,42 +79,37 @@ export async function sendQueryToGeminiCopilot(params: {
     throw new Error('No Gemini API Key provided. Please add your free key in Settings or AI Config.');
   }
 
-  // Build live context string
+  // Build ultra-lean single-line live context string (~35 tokens)
   let contextBlock = '';
   if (liveContext) {
-    contextBlock = `
-CURRENT LIVE STORE STATUS (WebRajya Retail POS):
-- Total Products in Catalog: ${liveContext.totalProducts}
-- Low Stock Items: ${liveContext.lowStockCount} items (${liveContext.lowStockSample.length > 0 ? liveContext.lowStockSample.join(', ') : 'None'})
-- Today's Completed Bills: ${liveContext.todaySalesCount}
-- Today's Revenue: ₹${liveContext.todaySalesRevenue.toLocaleString('en-IN')}
-- Customers with Dues: ${liveContext.totalCustomersWithDue} (Total Khata Pending: ₹${liveContext.totalKhataOutstanding.toLocaleString('en-IN')})
-Use this live data accurately when the user asks questions about their current inventory, sales, or customer dues.
-`;
+    contextBlock = `\n[STORE STATUS: SKUs=${liveContext.totalProducts}, LowStock=${liveContext.lowStockCount}${liveContext.lowStockSample.length > 0 ? ` (${liveContext.lowStockSample.slice(0, 3).join(', ')})` : ''}, TodayBills=${liveContext.todaySalesCount}, TodaySales=₹${liveContext.todaySalesRevenue}, KhataDues=₹${liveContext.totalKhataOutstanding}]`;
   }
 
-  const systemInstruction = `${SOFTWARE_KNOWLEDGE_BASE}\n\n${contextBlock}`;
+  const systemInstruction = `${SOFTWARE_KNOWLEDGE_BASE}${contextBlock}`;
 
   // Assemble Gemini contents payload
   const contents: any[] = [];
 
-  // We feed system instructions as the initial grounding prompt
+  // Grounding prompt with strict conciseness mandate
   contents.push({
     role: 'user',
-    parts: [{ text: `[SYSTEM INSTRUCTION & KNOWLEDGE BASE]\n${systemInstruction}\n\nUnderstood. Please wait for my questions.` }]
+    parts: [{ text: `[SYSTEM INSTRUCTION]\n${systemInstruction}` }]
   });
   contents.push({
     role: 'model',
-    parts: [{ text: "Understood! I am WebRajya Invoice Chatbot, fully grounded in WebRajya Invoice software, workflows, and live store status. How can I help you today?" }]
+    parts: [{ text: "Understood. 70-80 words max. Direct facts & steps only." }]
   });
 
-  // Append recent history (up to last 6 turns to keep fast and concise)
-  const recentHistory = history.slice(-6);
+  // Append recent history (only last 2 turns to keep token consumption minimal)
+  const recentHistory = history.slice(-2);
   for (const turn of recentHistory) {
-    contents.push({
-      role: turn.role,
-      parts: [{ text: turn.text }]
-    });
+    const textWithoutActions = turn.text.replace(/\[ACTION:[A-Z_]+\]/g, '').trim();
+    if (textWithoutActions) {
+      contents.push({
+        role: turn.role,
+        parts: [{ text: textWithoutActions }]
+      });
+    }
   }
 
   // Append current user message
@@ -117,7 +118,8 @@ Use this live data accurately when the user asks questions about their current i
     parts: [{ text: userQuery }]
   });
 
-  const CANDIDATE_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+  // Prioritize gemini-2.5-flash-lite: 5x cheaper, 2x faster, sub-second latency
+  const CANDIDATE_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
   let lastError: any = null;
 
   for (const model of CANDIDATE_MODELS) {
@@ -130,8 +132,8 @@ Use this live data accurately when the user asks questions about their current i
         body: JSON.stringify({
           contents,
           generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 800
+            temperature: 0.1,
+            maxOutputTokens: 140
           }
         })
       });
